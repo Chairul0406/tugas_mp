@@ -1,0 +1,72 @@
+name: Auto Release Android APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  release:
+    name: Build and Create GitHub Release
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Grant execute permission for Gradle wrapper
+        run: chmod +x gradlew
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug
+
+      - name: Get Latest Commit & Generate Changelog
+        id: commit_info
+        run: |
+          echo "COMMIT_MSG=$(git log -1 --pretty=format:'%s')" >> $GITHUB_OUTPUT
+          echo "COMMIT_AUTHOR=$(git log -1 --pretty=format:'%an')" >> $GITHUB_OUTPUT
+          echo "CHANGELOG<<EOF" >> $GITHUB_ENV
+          git log -n 5 --pretty=format:"- %s (%an)" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Determine Tag Name
+        id: tag
+        shell: bash
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            echo "tag_name=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag_name=v1.0.$(date +%Y%m%d%H%M%S)" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Release and Upload APK
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ steps.tag.outputs.tag_name }}
+          tag_name: ${{ steps.tag.outputs.tag_name }}
+          body: |
+            ## 🚀 Warteg Online - Automatic Release
+            Release generated automatically by GitHub Actions Runner.
+
+            ### 📌 Latest Commit:
+            - **Message:** ${{ steps.commit_info.outputs.COMMIT_MSG }}
+            - **Author:** ${{ steps.commit_info.outputs.COMMIT_AUTHOR }}
+
+            ### 📝 Recent Changelog (Last 5 Commits):
+            ${{ env.CHANGELOG }}
+          files: |
+            app/build/outputs/apk/debug/app-debug.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
