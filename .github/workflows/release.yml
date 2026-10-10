@@ -1,7 +1,10 @@
-name: Auto Release Android APK
+name: Auto Release Android APK on Push
 
 on:
   push:
+    branches:
+      - main
+      - master
     tags:
       - 'v*'
   workflow_dispatch:
@@ -46,24 +49,30 @@ jobs:
             echo "EOF"
           } >> $GITHUB_ENV
 
-      - name: Determine Tag Name
+      - name: Determine Tag and Release Name
         id: tag
         shell: bash
         run: |
           if [[ "${{ github.ref_type }}" == "tag" ]]; then
             echo "tag_name=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            echo "release_name=Release ${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
           else
-            echo "tag_name=v1.0.$(date +%Y%m%d%H%M%S)" >> $GITHUB_OUTPUT
+            COMMIT_SHA_SHORT=$(git rev-parse --short HEAD)
+            echo "tag_name=v1.0-${COMMIT_SHA_SHORT}" >> $GITHUB_OUTPUT
+            echo "release_name=Warteg Online Build (${COMMIT_SHA_SHORT})" >> $GITHUB_OUTPUT
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
           fi
 
-      - name: Create GitHub Actions Release and Upload APK
+      - name: Create GitHub Release and Upload APK
         uses: softprops/action-gh-release@v2
         with:
-          name: Release ${{ steps.tag.outputs.tag_name }}
+          name: ${{ steps.tag.outputs.release_name }}
           tag_name: ${{ steps.tag.outputs.tag_name }}
+          prerelease: ${{ steps.tag.outputs.is_prerelease }}
           body: |
-            ## 🚀 Warteg Online - Automatic Release
-            Release generated automatically by GitHub Actions Runner.
+            ## 🚀 Warteg Online - Auto Build & Release
+            Release generated automatically on push via GitHub Actions.
 
             ### 📌 Latest Commit:
             - **Message:** ${{ steps.commit_info.outputs.COMMIT_MSG }}
